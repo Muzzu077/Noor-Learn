@@ -12,7 +12,7 @@ import com.noorlearn.data.local.entity.SurahEntity
         SurahEntity::class,
         AyahEntity::class
     ],
-    version = 1,
+    version = 6,
     exportSchema = false
 )
 abstract class NoorLearnDatabase : RoomDatabase() {

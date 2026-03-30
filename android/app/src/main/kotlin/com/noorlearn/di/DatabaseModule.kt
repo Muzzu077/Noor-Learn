@@ -25,7 +25,9 @@ object DatabaseModule {
             context,
             NoorLearnDatabase::class.java,
             "noorlearn_db"
-        ).build()
+        )
+        .fallbackToDestructiveMigration()
+        .build()
     }
 
     @Provides

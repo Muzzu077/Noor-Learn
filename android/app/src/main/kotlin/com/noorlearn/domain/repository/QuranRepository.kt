@@ -8,6 +8,9 @@ import com.noorlearn.domain.model.RecitationLog
 interface QuranRepository {
     suspend fun getSurahs(): List<Surah>
     suspend fun getAyahs(surahId: Int): List<Ayah>
+    suspend fun getSurahAudioUrl(reciterId: Int, surahId: Int): Result<String>
+    suspend fun getBookmarkedAyahIds(userId: String): Set<Int>
+    suspend fun toggleBookmark(userId: String, ayahId: Int): Result<Boolean>
     suspend fun bookmarkAyah(userId: String, ayahId: Int): Result<Bookmark>
     suspend fun submitRecitation(
         userId: String,

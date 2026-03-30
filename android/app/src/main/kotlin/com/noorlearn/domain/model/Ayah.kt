@@ -6,6 +6,7 @@ data class Ayah(
     val ayahNumber: Int,
     val arabicText: String,
     val translationEn: String,
+    val transliteration: String,
     val translationUr: String,
     val tafsirShort: String,
     val audioUrl: String? = null

@@ -1,21 +1,25 @@
 package com.noorlearn.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.noorlearn.domain.model.Prophet
+import com.noorlearn.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,33 +33,36 @@ fun ProphetStoriesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
-                    Text(
-                        "Prophet Stories",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    ) 
+                title = {
+                    Text("Prophet Stories", fontWeight = FontWeight.Bold, color = Color.White)
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryGreen)
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = BeigeBackground
     ) { padding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = PrimaryGreen)
+            }
+        } else if (prophets.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text("No stories available yet", color = GrayText)
             }
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                contentPadding = PaddingValues(16.dp),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                items(prophets) { prophet ->
+                items(prophets, key = { it.id }) { prophet ->
                     ProphetCard(prophet = prophet)
                 }
             }
@@ -67,9 +74,9 @@ fun ProphetStoriesScreen(
 fun ProphetCard(prophet: Prophet) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = CardWhite)
     ) {
         Column(
             modifier = Modifier
@@ -82,39 +89,38 @@ fun ProphetCard(prophet: Prophet) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = prophet.name, 
+                    text = prophet.name,
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = DarkText
                 )
                 Text(
-                    text = prophet.arabicName, 
+                    text = prophet.arabicName,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.primary
+                    color = PrimaryGreen
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                color = LightGreen
             ) {
                 Text(
-                    text = "Era: ${prophet.period}", 
+                    text = prophet.period,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    color = PrimaryGreen,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            HorizontalDivider(color = DividerLight)
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Text(
-                text = prophet.summary, 
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight.times(1.2f)
+                text = prophet.summary,
+                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp),
+                color = GrayText
             )
         }
     }

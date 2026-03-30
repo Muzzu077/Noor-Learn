@@ -26,8 +26,8 @@ class GetSurahListUseCaseTest {
     fun `invoke should return list of surahs from repository`() = runBlocking {
         // Arrange
         val expectedSurahs = listOf(
-            Surah(1, "الفاتحة", "The Opening", "Meccan", 7),
-            Surah(2, "البقرة", "The Cow", "Medinan", 286)
+            Surah(1, "الفاتحة", "The Opening", "Meccan", 7, "The Opening Chapter"),
+            Surah(2, "البقرة", "The Cow", "Medinan", 286, "The Cow")
         )
         `when`(quranRepository.getSurahs()).thenReturn(expectedSurahs)
 

@@ -5,6 +5,12 @@ create table public.user_profiles (
   id uuid references auth.users(id) on delete cascade not null primary key,
   name text,
   role_mode text,
+  learning_level text,
+  primary_goal text,
+  daily_commitment text,
+  current_streak integer default 0,
+  longest_streak integer default 0,
+  last_activity_date text,
   created_at timestamptz default now()
 );
 

@@ -8,6 +8,7 @@ data class SurahEntity(
     @PrimaryKey val id: Int,
     val nameArabic: String,
     val nameEnglishTranslation: String,
+    val nameRoman: String,
     val revelationType: String,
     val numberOfAyahs: Int
 )

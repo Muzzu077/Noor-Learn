@@ -1,0 +1,32 @@
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/.idea/
+android/local.properties
+android/jdk-17/
+android/jdk-17.zip
+android/*.txt
+android/*.log
+android/app/build/
+android/.kotlin/
+
+# Scripts
+scripts/__pycache__/
+
+# Secrets
+*.env
+.mcp.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# General
+*.apk
+*.aab
+*.zip
+*.log
+node_modules/
+.sixth/
+allfiles.txt

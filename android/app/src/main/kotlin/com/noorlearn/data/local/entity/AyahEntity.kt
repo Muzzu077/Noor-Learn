@@ -10,5 +10,6 @@ data class AyahEntity(
     val ayahNumber: Int,
     val textArabic: String,
     val textTranslation: String,
+    val textTransliteration: String,
     val audioUrl: String?
 )

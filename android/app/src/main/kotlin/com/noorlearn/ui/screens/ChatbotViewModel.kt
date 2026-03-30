@@ -36,7 +36,8 @@ class ChatbotViewModel @Inject constructor(
             if (result.isSuccess) {
                 newMessages.add(Pair(result.getOrNull() ?: "Error parsing response.", false))
             } else {
-                newMessages.add(Pair("Sorry, I could not process your request. Check your connection.", false))
+                val errorMsg = result.exceptionOrNull()?.message ?: "Sorry, I could not process your request. Check your connection."
+                newMessages.add(Pair(errorMsg, false))
             }
             _messages.value = newMessages
             _isLoading.value = false

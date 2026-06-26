@@ -44,4 +44,12 @@ class ProfileViewModel @Inject constructor(
             _isSignedOut.value = true
         }
     }
+
+    fun deleteAccount() {
+        viewModelScope.launch {
+            authRepository.deleteAccount()
+            userPreferences.clearAll()
+            _isSignedOut.value = true
+        }
+    }
 }

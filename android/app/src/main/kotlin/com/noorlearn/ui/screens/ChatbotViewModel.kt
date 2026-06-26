@@ -10,13 +10,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class ChatMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val text: String,
+    val isUser: Boolean,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 @HiltViewModel
 class ChatbotViewModel @Inject constructor(
     private val askChatbotUseCase: AskChatbotUseCase
 ) : ViewModel() {
 
-    private val _messages = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-    val messages: StateFlow<List<Pair<String, Boolean>>> = _messages.asStateFlow() // Pair(message, isUser)
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -25,7 +32,7 @@ class ChatbotViewModel @Inject constructor(
         if (question.isBlank()) return
 
         val currentMessages = _messages.value.toMutableList()
-        currentMessages.add(Pair(question, true))
+        currentMessages.add(ChatMessage(text = question, isUser = true))
         _messages.value = currentMessages
 
         viewModelScope.launch {
@@ -34,13 +41,17 @@ class ChatbotViewModel @Inject constructor(
             
             val newMessages = _messages.value.toMutableList()
             if (result.isSuccess) {
-                newMessages.add(Pair(result.getOrNull() ?: "Error parsing response.", false))
+                newMessages.add(ChatMessage(text = result.getOrNull() ?: "Error parsing response.", isUser = false))
             } else {
                 val errorMsg = result.exceptionOrNull()?.message ?: "Sorry, I could not process your request. Check your connection."
-                newMessages.add(Pair(errorMsg, false))
+                newMessages.add(ChatMessage(text = errorMsg, isUser = false))
             }
             _messages.value = newMessages
             _isLoading.value = false
         }
+    }
+
+    fun clearChat() {
+        _messages.value = emptyList()
     }
 }

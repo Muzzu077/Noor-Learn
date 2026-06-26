@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +44,21 @@ class UserPreferencesDataStore @Inject constructor(
 
         // Local bookmarks (comma-separated ayah IDs)
         val BOOKMARKED_AYAH_IDS = stringPreferencesKey("bookmarked_ayah_ids")
+
+        // Daily Journey Progress
+        val DAILY_JOURNEY_DAY = intPreferencesKey("daily_journey_day")
+        val DAILY_JOURNEY_TASKS_COMPLETED = stringPreferencesKey("daily_journey_tasks_completed")
+
+        // Vocabulary Builder
+        val MASTERED_VOCAB_IDS = stringPreferencesKey("mastered_vocab_ids")
+
+        // Daily reset tracking — stores the date string of last journey reset (e.g. "2026-06-26")
+        val LAST_JOURNEY_DATE = stringPreferencesKey("last_journey_date")
+
+        // Last Read Quran tracking
+        val LAST_READ_SURAH_ID = intPreferencesKey("last_read_surah_id")
+        val LAST_READ_SURAH_NAME = stringPreferencesKey("last_read_surah_name")
+        val LAST_READ_AYAH_NUMBER = intPreferencesKey("last_read_ayah_number")
     }
 
     val roleMode: Flow<String> = context.dataStore.data.map { it[ROLE_MODE] ?: "adult" }
@@ -59,6 +75,105 @@ class UserPreferencesDataStore @Inject constructor(
     val primaryGoal: Flow<String?> = context.dataStore.data.map { it[PRIMARY_GOAL] }
     val dailyCommitment: Flow<String?> = context.dataStore.data.map { it[DAILY_COMMITMENT] }
     val longestStreak: Flow<Int> = context.dataStore.data.map { it[LONGEST_STREAK] ?: 0 }
+
+    val dailyJourneyDay: Flow<Int> = context.dataStore.data.map { it[DAILY_JOURNEY_DAY] ?: 1 }
+    val dailyJourneyTasksCompleted: Flow<Set<String>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[DAILY_JOURNEY_TASKS_COMPLETED] ?: ""
+        if (raw.isBlank()) emptySet()
+        else raw.split(",").toSet()
+    }
+
+    val masteredVocabIds: Flow<Set<Int>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[MASTERED_VOCAB_IDS] ?: ""
+        if (raw.isBlank()) emptySet()
+        else raw.split(",").mapNotNull { it.toIntOrNull() }.toSet()
+    }
+
+    val lastReadSurahId: Flow<Int?> = context.dataStore.data.map { it[LAST_READ_SURAH_ID] }
+    val lastReadSurahName: Flow<String?> = context.dataStore.data.map { it[LAST_READ_SURAH_NAME] }
+    val lastReadAyahNumber: Flow<Int?> = context.dataStore.data.map { it[LAST_READ_AYAH_NUMBER] }
+
+    suspend fun saveLastRead(surahId: Int, surahName: String, ayahNumber: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[LAST_READ_SURAH_ID] = surahId
+            prefs[LAST_READ_SURAH_NAME] = surahName
+            prefs[LAST_READ_AYAH_NUMBER] = ayahNumber
+        }
+    }
+
+    suspend fun toggleVocabMastery(vocabId: Int): Boolean {
+        var isMastered = false
+        context.dataStore.edit { prefs ->
+            val raw = prefs[MASTERED_VOCAB_IDS] ?: ""
+            val current = if (raw.isBlank()) mutableSetOf()
+            else raw.split(",").mapNotNull { it.toIntOrNull() }.toMutableSet()
+
+            if (current.contains(vocabId)) {
+                current.remove(vocabId)
+                isMastered = false
+            } else {
+                current.add(vocabId)
+                isMastered = true
+            }
+            prefs[MASTERED_VOCAB_IDS] = current.joinToString(",")
+        }
+        return isMastered
+    }
+
+    suspend fun saveDailyJourneyDay(day: Int) {
+        context.dataStore.edit {
+            it[DAILY_JOURNEY_DAY] = day
+            it[DAILY_JOURNEY_TASKS_COMPLETED] = "" // Reset task checklist on new day
+        }
+    }
+
+    suspend fun toggleDailyJourneyTask(taskId: String): Boolean {
+        var isCompleted = false
+        context.dataStore.edit { prefs ->
+            val raw = prefs[DAILY_JOURNEY_TASKS_COMPLETED] ?: ""
+            val current = if (raw.isBlank()) mutableSetOf()
+            else raw.split(",").toMutableSet()
+
+            if (current.contains(taskId)) {
+                current.remove(taskId)
+                isCompleted = false
+            } else {
+                current.add(taskId)
+                isCompleted = true
+            }
+            prefs[DAILY_JOURNEY_TASKS_COMPLETED] = current.joinToString(",")
+        }
+        return isCompleted
+    }
+
+    suspend fun completeDailyJourneyTask(taskId: String) {
+        context.dataStore.edit { prefs ->
+            val raw = prefs[DAILY_JOURNEY_TASKS_COMPLETED] ?: ""
+            val current = if (raw.isBlank()) mutableSetOf()
+            else raw.split(",").toMutableSet()
+
+            if (!current.contains(taskId)) {
+                current.add(taskId)
+                prefs[DAILY_JOURNEY_TASKS_COMPLETED] = current.joinToString(",")
+            }
+        }
+    }
+
+    /**
+     * Checks if today is a new day compared to when tasks were last reset.
+     * If so, clears the completed tasks list for a fresh daily journey.
+     * Should be called on every app launch / ViewModel init.
+     */
+    suspend fun checkAndResetDailyTasks(todayDate: String) {
+        context.dataStore.edit { prefs ->
+            val lastDate = prefs[LAST_JOURNEY_DATE] ?: ""
+            if (lastDate != todayDate) {
+                // New day — reset journey tasks
+                prefs[DAILY_JOURNEY_TASKS_COMPLETED] = ""
+                prefs[LAST_JOURNEY_DATE] = todayDate
+            }
+        }
+    }
 
     suspend fun saveOnboardingPreferences(level: String, goal: String, commitment: String) {
         context.dataStore.edit {

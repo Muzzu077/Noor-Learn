@@ -1,5 +1,9 @@
 package com.noorlearn.ui.screens
 
+import android.Manifest
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -21,6 +25,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,14 +37,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.noorlearn.domain.model.Ayah
+import com.noorlearn.data.speech.SpeechState
+import com.noorlearn.data.speech.AlignedWord
+import com.noorlearn.data.speech.WordStatus
 import com.noorlearn.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,8 +77,31 @@ fun AyahReaderScreen(
     val explanation by viewModel.explanation.collectAsState()
     val isExplaining by viewModel.isExplaining.collectAsState()
 
-    LaunchedEffect(surahId) {
-        viewModel.loadAyahs(surahId)
+    val recitationState by viewModel.recitationState.collectAsState()
+    val alignedWords by viewModel.alignedWords.collectAsState()
+    val recitationScore by viewModel.recitationScore.collectAsState()
+    val recitationFeedback by viewModel.recitationFeedback.collectAsState()
+    val isFeedbackLoading by viewModel.isFeedbackLoading.collectAsState()
+    val activeRecitationAyahId by viewModel.activeRecitationAyahId.collectAsState()
+
+    val context = LocalContext.current
+    var permissionTargetAyahId by remember { mutableStateOf<Int?>(null) }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            val ayahId = permissionTargetAyahId
+            if (isGranted && ayahId != null) {
+                viewModel.startRecitation(ayahId)
+            } else if (!isGranted) {
+                Toast.makeText(context, "Microphone permission is required for recitation feedback.", Toast.LENGTH_SHORT).show()
+            }
+            permissionTargetAyahId = null
+        }
+    )
+
+    LaunchedEffect(surahId, surahName) {
+        viewModel.loadAyahs(surahId, surahName)
     }
 
     Scaffold(
@@ -73,29 +112,34 @@ fun AyahReaderScreen(
                         Text(
                             surahName,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = PrimaryGreen,
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
                             "Surah $surahId",
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = GrayText,
                             style = MaterialTheme.typography.labelMedium
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryGreen)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryGreen)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White,
+                    titleContentColor = PrimaryGreen
+                )
             )
         },
-        containerColor = BeigeBackground
+        containerColor = Color.White
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.White)
+                .gridBackground()
                 .padding(padding)
         ) {
             // Audio Player Bar
@@ -124,7 +168,7 @@ fun AyahReaderScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
-                                onClick = { viewModel.loadAyahs(surahId) },
+                                onClick = { viewModel.loadAyahs(surahId, surahName) },
                                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen)
                             ) {
                                 Text("Retry")
@@ -152,6 +196,7 @@ fun AyahReaderScreen(
                                             .fillMaxWidth()
                                             .padding(20.dp),
                                         style = MaterialTheme.typography.headlineSmall.copy(
+                                            fontFamily = ArabicFontFamily,
                                             fontWeight = FontWeight.Medium,
                                             lineHeight = 40.sp
                                         ),
@@ -163,6 +208,7 @@ fun AyahReaderScreen(
                         }
 
                         items(ayahs, key = { it.id }) { ayah ->
+                            val isActive = activeRecitationAyahId == ayah.id
                             AyahCard(
                                 ayah = ayah,
                                 isBookmarked = ayah.id in bookmarkedAyahIds,
@@ -170,7 +216,20 @@ fun AyahReaderScreen(
                                 onExplainClick = { viewModel.explainAyah(ayah) },
                                 isExplainLoading = isExplaining && explainAyahId == ayah.id,
                                 explanationText = if (explainAyahId == ayah.id) explanation else null,
-                                onDismissExplanation = { viewModel.dismissExplanation() }
+                                onDismissExplanation = { viewModel.dismissExplanation() },
+                                
+                                recitationState = if (isActive) recitationState else SpeechState.Idle,
+                                isActiveRecitation = isActive,
+                                alignedWords = if (isActive) alignedWords else null,
+                                recitationScore = if (isActive) recitationScore else null,
+                                recitationFeedback = if (isActive) recitationFeedback else null,
+                                isFeedbackLoading = isActive && isFeedbackLoading,
+                                onReciteClick = {
+                                    permissionTargetAyahId = ayah.id
+                                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                },
+                                onStopRecitation = { viewModel.stopRecitation() },
+                                onDismissRecitation = { viewModel.resetRecitation() }
                             )
                         }
                     }
@@ -195,6 +254,12 @@ fun SurahAudioPlayer(
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build()
+            setAudioAttributes(audioAttributes, true)
+            
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
                     if (state == Player.STATE_ENDED) {
@@ -206,7 +271,27 @@ fun SurahAudioPlayer(
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
                 }
+
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    android.util.Log.e("AyahReaderScreen", "ExoPlayer playback error", error)
+                    Toast.makeText(context, "Audio error: ${error.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    isPlaying = false
+                }
             })
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                exoPlayer.pause()
+                isPlaying = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -245,9 +330,10 @@ fun SurahAudioPlayer(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = PrimaryGreenDark),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = LightGreenSoft),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderLight),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Reciter selector row
@@ -260,7 +346,7 @@ fun SurahAudioPlayer(
                     Text(
                         "Reciter",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = GrayText
                     )
                     Row(
                         modifier = Modifier
@@ -272,13 +358,13 @@ fun SurahAudioPlayer(
                         Text(
                             selectedReciter.name,
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
+                            color = PrimaryGreen
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             Icons.Filled.KeyboardArrowDown,
                             contentDescription = "Change reciter",
-                            tint = Color.White.copy(alpha = 0.7f),
+                            tint = GrayText,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -287,7 +373,7 @@ fun SurahAudioPlayer(
                 if (isAudioLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(32.dp),
-                        color = Color.White,
+                        color = PrimaryGreen,
                         strokeWidth = 2.dp
                     )
                 }
@@ -304,7 +390,7 @@ fun SurahAudioPlayer(
                         .fillMaxWidth()
                         .padding(top = 8.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f))
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column {
                         RECITERS.forEach { reciter ->
@@ -326,13 +412,13 @@ fun SurahAudioPlayer(
                                     },
                                     colors = RadioButtonDefaults.colors(
                                         selectedColor = OrangeAccent,
-                                        unselectedColor = Color.White.copy(alpha = 0.5f)
+                                        unselectedColor = GrayText.copy(alpha = 0.5f)
                                     )
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     reciter.name,
-                                    color = Color.White,
+                                    color = DarkText,
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = if (reciter.id == selectedReciter.id) FontWeight.Bold else FontWeight.Normal
                                 )
@@ -352,7 +438,7 @@ fun SurahAudioPlayer(
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp)),
                 color = OrangeAccent,
-                trackColor = Color.White.copy(alpha = 0.2f)
+                trackColor = BorderLight
             )
 
             // Time labels
@@ -364,12 +450,12 @@ fun SurahAudioPlayer(
                     Text(
                         formatTime((progress * duration).toLong()),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = GrayText
                     )
                     Text(
                         formatTime(duration),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = GrayText
                     )
                 }
             }
@@ -392,7 +478,7 @@ fun SurahAudioPlayer(
                     Icon(
                         Icons.Filled.Replay10,
                         contentDescription = "Rewind 10s",
-                        tint = Color.White.copy(alpha = if (audioUrl != null) 0.9f else 0.3f),
+                        tint = PrimaryGreen.copy(alpha = if (audioUrl != null) 0.9f else 0.3f),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -437,7 +523,7 @@ fun SurahAudioPlayer(
                     Icon(
                         Icons.Filled.Forward10,
                         contentDescription = "Forward 10s",
-                        tint = Color.White.copy(alpha = if (audioUrl != null) 0.9f else 0.3f),
+                        tint = PrimaryGreen.copy(alpha = if (audioUrl != null) 0.9f else 0.3f),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -461,13 +547,25 @@ fun AyahCard(
     onExplainClick: () -> Unit = {},
     isExplainLoading: Boolean = false,
     explanationText: String? = null,
-    onDismissExplanation: () -> Unit = {}
+    onDismissExplanation: () -> Unit = {},
+    
+    // Recitation parameters
+    recitationState: SpeechState = SpeechState.Idle,
+    isActiveRecitation: Boolean = false,
+    alignedWords: List<AlignedWord>? = null,
+    recitationScore: Float? = null,
+    recitationFeedback: String? = null,
+    isFeedbackLoading: Boolean = false,
+    onReciteClick: () -> Unit = {},
+    onStopRecitation: () -> Unit = {},
+    onDismissRecitation: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardWhite),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderLight),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
@@ -511,6 +609,7 @@ fun AyahCard(
             Text(
                 text = ayah.arabicText,
                 style = MaterialTheme.typography.headlineMedium.copy(
+                    fontFamily = ArabicFontFamily,
                     fontWeight = FontWeight.Medium,
                     lineHeight = 48.sp
                 ),
@@ -570,33 +669,271 @@ fun AyahCard(
                 }
             }
 
+            // Recitation Practice Panel
+            if (isActiveRecitation) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = BeigeBackground,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Recitation Practice",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = PrimaryGreenDark
+                            )
+                            IconButton(onClick = onStopRecitation, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Filled.Close, contentDescription = "Close", tint = GrayText)
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        when {
+                            recitationState is SpeechState.Listening -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Mic,
+                                        contentDescription = "Listening",
+                                        tint = ErrorRed,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "Listening... Speak now",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = ErrorRed
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = onStopRecitation,
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Stop & Evaluate")
+                                }
+                            }
+                            
+                            recitationState is SpeechState.Processing || isFeedbackLoading -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = PrimaryGreen,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text("Evaluating recitation...", style = MaterialTheme.typography.bodyMedium, color = GrayText)
+                                }
+                            }
+                            
+                            recitationScore != null -> {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    val badgeColor = if (recitationScore >= 85f) PrimaryGreen else OrangeAccent
+                                    val badgeBg = if (recitationScore >= 85f) LightGreenSoft else OrangeLight
+                                    
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = badgeBg,
+                                        modifier = Modifier.align(Alignment.Start)
+                                    ) {
+                                        Text(
+                                            "Accuracy: %.0f%%".format(recitationScore),
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = badgeColor,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    if (alignedWords != null) {
+                                        Text(
+                                            text = "Aligned Word Results (Incorrect/Skipped highlighted):",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = GrayText
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        
+                                        val highlightedText = buildAnnotatedString {
+                                            alignedWords.forEachIndexed { index, aligned ->
+                                                val color = when (aligned.status) {
+                                                    WordStatus.CORRECT -> PrimaryGreen
+                                                    WordStatus.INCORRECT -> ErrorRed
+                                                    WordStatus.SKIPPED -> GrayText.copy(alpha = 0.5f)
+                                                }
+                                                withStyle(style = SpanStyle(color = color, fontWeight = FontWeight.Bold, fontSize = 20.sp, fontFamily = ArabicFontFamily)) {
+                                                    append(aligned.word)
+                                                }
+                                                if (index < alignedWords.lastIndex) {
+                                                    append(" ")
+                                                }
+                                            }
+                                        }
+                                        
+                                        Text(
+                                            text = highlightedText,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            textAlign = TextAlign.Right,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color.White, RoundedCornerShape(8.dp))
+                                                .padding(12.dp)
+                                        )
+                                    }
+                                    
+                                    if (!recitationFeedback.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            "AI Pronunciation Tip:",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = GrayText
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color.White,
+                                            border = ButtonDefaults.outlinedButtonBorder(enabled = true),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                recitationFeedback,
+                                                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                                                color = DarkText,
+                                                modifier = Modifier.padding(10.dp)
+                                            )
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = onReciteClick,
+                                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Recite Again")
+                                        }
+                                        OutlinedButton(
+                                            onClick = onDismissRecitation,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Close")
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            recitationState is SpeechState.Error -> {
+                                Text(
+                                    (recitationState as SpeechState.Error).message,
+                                    color = ErrorRed,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = onReciteClick,
+                                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Retry")
+                                    }
+                                    OutlinedButton(
+                                        onClick = onDismissRecitation,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Cancel")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Explain This button + AI explanation
-            if (explanationText == null && !isExplainLoading) {
-                Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .clickable { onExplainClick() },
-                    shape = RoundedCornerShape(20.dp),
-                    color = OrangeLight
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            // Action row (Explain This + Recite Ayah)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Explain This button
+                if (explanationText == null && !isExplainLoading && !isActiveRecitation) {
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { onExplainClick() },
+                        shape = RoundedCornerShape(20.dp),
+                        color = OrangeLight
                     ) {
-                        Icon(
-                            Icons.Filled.AutoAwesome,
-                            contentDescription = null,
-                            tint = OrangeAccent,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "Explain This",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = OrangeAccent
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.AutoAwesome,
+                                contentDescription = null,
+                                tint = OrangeAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Explain This",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = OrangeAccent
+                            )
+                        }
+                    }
+                }
+
+                // Recite Button
+                if (!isActiveRecitation) {
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { onReciteClick() },
+                        shape = RoundedCornerShape(20.dp),
+                        color = LightGreenSoft
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Mic,
+                                contentDescription = null,
+                                tint = PrimaryGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Recite Ayah",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = PrimaryGreen
+                            )
+                        }
                     }
                 }
             }

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,7 +34,7 @@ import com.noorlearn.ui.theme.GrayText
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("dashboard", "Home", Icons.Filled.Home)
     object Quran : Screen("surah_list", "Qur'an", Icons.AutoMirrored.Filled.MenuBook)
-    object AskAI : Screen("chatbot", "Ask AI", Icons.Filled.AutoAwesome)
+    object Journey : Screen("daily_journey", "Journey", Icons.Filled.Explore)
     object Tools : Screen("tools", "Tools", Icons.Filled.Handyman)
     object Profile : Screen("profile", "Profile", Icons.Filled.Person)
 }
@@ -41,7 +42,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 val items = listOf(
     Screen.Home,
     Screen.Quran,
-    Screen.AskAI,
+    Screen.Journey,
     Screen.Tools,
     Screen.Profile
 )
@@ -58,11 +59,19 @@ fun AppNavigation(
     val currentRoute = navBackStackEntry?.destination?.route
     val user by authViewModel.user.collectAsState()
 
+    val isBottomBarRoute = currentRoute != null && (
+        currentRoute == "dashboard" ||
+        currentRoute == "surah_list" ||
+        currentRoute == "daily_journey" ||
+        currentRoute.startsWith("tools") ||
+        currentRoute == "profile"
+    )
+
     Scaffold(
         containerColor = BeigeBackground,
         bottomBar = {
             // Only show bottom bar on main tabs
-            if (currentRoute in bottomBarRoutes) {
+            if (isBottomBarRoute) {
                 NavigationBar(
                     containerColor = BeigeBackground,
                     contentColor = PrimaryGreen
@@ -72,7 +81,11 @@ fun AppNavigation(
                         NavigationBarItem(
                             icon = { Icon(screen.icon, contentDescription = screen.title) },
                             label = { Text(screen.title) },
-                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            selected = currentDestination?.hierarchy?.any { 
+                                val baseRoute = it.route?.substringBefore("?") ?: ""
+                                val screenBaseRoute = screen.route.substringBefore("?")
+                                baseRoute == screenBaseRoute 
+                            } == true,
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = PrimaryGreen,
                                 selectedTextColor = PrimaryGreen,
@@ -96,8 +109,8 @@ fun AppNavigation(
         }
     ) { innerPadding ->
         
-        // Show nothing until session is checked
-        if (user == null && authViewModel.isLoading.value) {
+        // Show loading indicator until session check completes
+        if (user == null && authViewModel.isLoading.collectAsState().value) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 CircularProgressIndicator(color = PrimaryGreen)
             }
@@ -121,11 +134,23 @@ fun AppNavigation(
             composable(Screen.Quran.route) {
                 SurahListScreen(navController = navController)
             }
-            composable(Screen.AskAI.route) {
+            composable(Screen.Journey.route) {
+                DailyJourneyScreen(navController = navController)
+            }
+            composable("chatbot") {
                 ChatbotScreen(navController = navController)
             }
-            composable(Screen.Tools.route) {
-                ToolsScreen(navController = navController)
+            composable(
+                route = "tools?tab={tab}",
+                arguments = listOf(
+                    navArgument("tab") {
+                        type = NavType.IntType
+                        defaultValue = 0
+                    }
+                )
+            ) { backStackEntry ->
+                val tab = backStackEntry.arguments?.getInt("tab") ?: 0
+                ToolsScreen(navController = navController, initialTab = tab)
             }
             composable(Screen.Profile.route) {
                 ProfileScreen(navController = navController)
@@ -156,6 +181,15 @@ fun AppNavigation(
             }
             composable("bookmarks") {
                 BookmarksScreen(navController = navController)
+            }
+            composable("reflection_journal") {
+                ReflectionJournalScreen(navController = navController)
+            }
+            composable("vocabulary_builder") {
+                VocabularyBuilderScreen(navController = navController)
+            }
+            composable("recitation_history") {
+                RecitationHistoryScreen(navController = navController)
             }
         }
     }

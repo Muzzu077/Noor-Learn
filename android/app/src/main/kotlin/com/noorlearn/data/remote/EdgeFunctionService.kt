@@ -20,23 +20,26 @@ import javax.inject.Inject
 class EdgeFunctionService @Inject constructor(
     private val userPreferences: UserPreferencesDataStore
 ) {
-    private val httpClient = HttpClient(Android) {
-        engine {
-            connectTimeout = 30_000
-            socketTimeout = 60_000
-        }
-    }
-
     companion object {
+        // Singleton HttpClient — one per app process
+        private val httpClient = HttpClient(Android) {
+            engine {
+                connectTimeout = 30_000
+                socketTimeout = 60_000
+            }
+        }
+
         private const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+        private const val MAX_QUESTION_LENGTH = 2000
         
         // List of reliable free models to try if one is rate-limited
         private val FREE_MODELS = listOf(
-            "openrouter/auto", // Best primary choice - routes to current best free model
+            "google/gemini-2.0-flash-lite-preview-02-05:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "deepseek/deepseek-r1:free",
+            "qwen/qwen-2.5-72b-instruct:free",
             "google/gemini-2.0-flash-exp:free",
-            "meta-llama/llama-3.1-8b-instruct:free",
-            "mistralai/mistral-7b-instruct:free",
-            "google/gemma-2-9b-it:free"
+            "openrouter/auto"
         )
 
         private const val SYSTEM_PROMPT = """You are NoorLearn AI — a friendly, warm Islamic learning companion inside a mobile app.
@@ -55,6 +58,9 @@ CRITICAL RULES:
     }
 
     suspend fun askChatbot(question: String): Result<String> = withContext(Dispatchers.IO) {
+        // Input validation — prevent abuse
+        if (question.isBlank()) return@withContext Result.failure(Exception("Question cannot be empty."))
+        val sanitizedQuestion = question.take(MAX_QUESTION_LENGTH)
         val apiKey = BuildConfig.OPENROUTER_API_KEY
         val level = userPreferences.learningLevel.first() ?: "Beginner"
         
@@ -78,7 +84,7 @@ CRITICAL RULES:
                     })
                     put(JSONObject().apply {
                         put("role", "user")
-                        put("content", question)
+                        put("content", sanitizedQuestion)
                     })
                 }
 
@@ -98,7 +104,9 @@ CRITICAL RULES:
                 }
 
                 val responseText = response.bodyAsText()
-                android.util.Log.d("EdgeFunctionService", "OpenRouter [$model] response: ${response.status} -> ${responseText.take(150)}")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.d("EdgeFunctionService", "[$model] Status: ${response.status}")
+                }
 
                 when (response.status.value) {
                     in 200..299 -> {
@@ -112,15 +120,20 @@ CRITICAL RULES:
                             return@withContext Result.success(answer.trim())
                         }
                     }
+                    429 -> {
+                        lastError = "Rate limited on $model, trying next..."
+                        if (BuildConfig.DEBUG) android.util.Log.w("EdgeFunctionService", "Rate limited: $model")
+                        continue
+                    }
                     else -> {
-                        lastError = "HTTP ${response.status.value}: ${response.status.description}"
-                        android.util.Log.e("EdgeFunctionService", "HTTP Error for $model: ${response.status.value} -> $responseText")
+                        lastError = "Service error (${response.status.value})"
+                        if (BuildConfig.DEBUG) android.util.Log.w("EdgeFunctionService", "HTTP ${response.status.value} for $model")
                         continue
                     }
                 }
             } catch (e: Exception) {
-                lastError = e.message ?: e.toString()
-                android.util.Log.e("EdgeFunctionService", "Error calling OpenRouter with $model", e)
+                lastError = e.message ?: "Unknown error"
+                if (BuildConfig.DEBUG) android.util.Log.e("EdgeFunctionService", "Error with $model", e)
             }
         }
         

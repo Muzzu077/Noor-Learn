@@ -5,6 +5,7 @@ import com.noorlearn.domain.repository.AuthRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -39,7 +40,7 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun signUp(email: String, password: String, name: String): Result<User> = withContext(Dispatchers.IO) {
         try {
-            supabaseClient.auth.signUpWith(Email) {
+            val response = supabaseClient.auth.signUpWith(Email) {
                 this.email = email
                 this.password = password
                 this.data = kotlinx.serialization.json.buildJsonObject {
@@ -47,12 +48,39 @@ class AuthRepositoryImpl @Inject constructor(
                 }
             }
             val currentUser = supabaseClient.auth.currentUserOrNull()
-                ?: return@withContext Result.failure(Exception("Sign up failed: no user returned"))
+            if (currentUser != null) {
+                Result.success(
+                    User(
+                        id = currentUser.id,
+                        name = name,
+                        email = currentUser.email ?: email,
+                        roleMode = "adult",
+                        streakDays = 0,
+                        isPremium = false,
+                        createdAt = currentUser.createdAt.toString()
+                    )
+                )
+            } else {
+                Result.failure(Exception("Verification email sent! Please check your inbox to verify your account before logging in."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun signInWithGoogle(idToken: String): Result<User> = withContext(Dispatchers.IO) {
+        try {
+            supabaseClient.auth.signInWith(io.github.jan.supabase.auth.providers.builtin.IDToken) {
+                this.idToken = idToken
+                this.provider = io.github.jan.supabase.auth.providers.Google
+            }
+            val currentUser = supabaseClient.auth.currentUserOrNull()
+                ?: return@withContext Result.failure(Exception("Google Sign in failed: no user returned"))
             Result.success(
                 User(
                     id = currentUser.id,
-                    name = name,
-                    email = currentUser.email ?: email,
+                    name = currentUser.userMetadata?.get("name")?.toString()?.trim('"') ?: "",
+                    email = currentUser.email ?: "",
                     roleMode = "adult",
                     streakDays = 0,
                     isPremium = false,
@@ -65,6 +93,13 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getCurrentUser(): User? = withContext(Dispatchers.IO) {
+        try {
+            supabaseClient.auth.awaitInitialization()
+        } catch (e: Exception) {
+            if (com.noorlearn.BuildConfig.DEBUG) {
+                android.util.Log.e("AuthRepository", "Supabase init error", e)
+            }
+        }
         val currentUser = supabaseClient.auth.currentUserOrNull() ?: return@withContext null
         User(
             id = currentUser.id,
@@ -79,5 +114,24 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun signOut() = withContext(Dispatchers.IO) {
         supabaseClient.auth.signOut()
+    }
+
+    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            supabaseClient.auth.resetPasswordForEmail(email = email)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteAccount(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            supabaseClient.postgrest.rpc("delete_user_account")
+            supabaseClient.auth.signOut()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

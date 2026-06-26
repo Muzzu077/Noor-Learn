@@ -1,7 +1,7 @@
 package com.noorlearn.domain.model
 
 data class RecitationLog(
-    val id: Long,
+    val id: String,
     val userId: String,
     val ayahId: Int,
     val transcribedText: String,

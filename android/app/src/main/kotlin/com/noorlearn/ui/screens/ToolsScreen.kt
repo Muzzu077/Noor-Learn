@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -60,13 +61,23 @@ data class DuaItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ToolsScreen(navController: NavController) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+fun ToolsScreen(
+    navController: NavController,
+    initialTab: Int = 0,
+    viewModel: ToolsViewModel = hiltViewModel()
+) {
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1 || selectedTab == 0) {
+            viewModel.completeAdhkarTask()
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BeigeBackground)
+            .background(BeigeBackground).gridBackground()
     ) {
         // Header
         Box(
@@ -174,7 +185,10 @@ fun TasbeehContent() {
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = phaseArabic,
-            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp),
+            style = MaterialTheme.typography.headlineLarge.copy(
+                fontFamily = ArabicFontFamily,
+                fontSize = 32.sp
+            ),
             color = PrimaryGreen
         )
 
@@ -413,6 +427,7 @@ private fun LazyColumnScope(duas: List<DuaItem>) {
                                 Text(
                                     text = item.arabic,
                                     style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontFamily = ArabicFontFamily,
                                         lineHeight = 42.sp,
                                         fontWeight = FontWeight.Medium
                                     ),

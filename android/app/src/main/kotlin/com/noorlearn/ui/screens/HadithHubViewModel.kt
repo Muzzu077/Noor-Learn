@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.noorlearn.domain.model.Hadith
 import com.noorlearn.domain.repository.HadithRepository
 import com.noorlearn.data.local.preferences.UserPreferencesDataStore
+import com.noorlearn.domain.usecase.AskChatbotUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class HadithHubViewModel @Inject constructor(
     private val hadithRepository: HadithRepository,
-    private val userPreferences: UserPreferencesDataStore
+    private val userPreferences: UserPreferencesDataStore,
+    private val askChatbotUseCase: AskChatbotUseCase
 ) : ViewModel() {
 
     private val _allHadiths = MutableStateFlow<List<Hadith>>(emptyList())
@@ -39,6 +41,7 @@ class HadithHubViewModel @Inject constructor(
                 userPreferences.updateStreak()
                 _allHadiths.value = hadithRepository.getHadithsBySource("All")
                 _hadiths.value = _allHadiths.value
+                userPreferences.completeDailyJourneyTask("hadith_day")
             } catch (_: Exception) { }
             finally {
                 _isLoading.value = false
@@ -63,5 +66,32 @@ class HadithHubViewModel @Inject constructor(
                 it.topic.lowercase().contains(lowerCaseQuery)
             }
         }
+    }
+
+    // Explain Hadith state
+    private val _explainHadithId = MutableStateFlow<Long?>(null)
+    val explainHadithId: StateFlow<Long?> = _explainHadithId.asStateFlow()
+
+    private val _explanation = MutableStateFlow<String?>(null)
+    val explanation: StateFlow<String?> = _explanation.asStateFlow()
+
+    private val _isExplaining = MutableStateFlow(false)
+    val isExplaining: StateFlow<Boolean> = _isExplaining.asStateFlow()
+
+    fun explainHadith(hadith: Hadith) {
+        _explainHadithId.value = hadith.id
+        _explanation.value = null
+        _isExplaining.value = true
+        viewModelScope.launch {
+            val prompt = "Explain this Hadith briefly (3-4 sentences). Give the context, lessons, and how to apply it in daily life:\n\nArabic: ${hadith.arabicText}\nTranslation: ${hadith.translationEn}\nSource: ${hadith.source}\nGrade: ${hadith.grade}\n\nKeep it simple and practical."
+            val result = askChatbotUseCase(prompt)
+            _explanation.value = result.getOrElse { "Could not load explanation. Please try again." }
+            _isExplaining.value = false
+        }
+    }
+
+    fun dismissExplanation() {
+        _explainHadithId.value = null
+        _explanation.value = null
     }
 }

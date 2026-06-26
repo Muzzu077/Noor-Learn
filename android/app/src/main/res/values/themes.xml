@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.NoorLearn" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- Base theme used before Compose takes over -->
+    <style name="Theme.NoorLearn" parent="Theme.SplashScreen">
+        <item name="android:windowBackground">@android:color/white</item>
+        <!-- Splash screen emerald background -->
+        <item name="windowSplashScreenBackground">#0F6B5B</item>
+        <!-- Splash icon from drawable -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <!-- Post-splash theme restores the app theme -->
+        <item name="postSplashScreenTheme">@style/Theme.NoorLearn.Main</item>
+    </style>
+
+    <!-- Main app theme after splash -->
+    <style name="Theme.NoorLearn.Main" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
     </style>
 </resources>

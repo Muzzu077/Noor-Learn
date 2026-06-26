@@ -52,7 +52,7 @@ fun SurahListScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BeigeBackground)
+            .background(BeigeBackground).gridBackground()
     ) {
         // Header
         Box(
@@ -236,6 +236,7 @@ fun SurahCard(surah: Surah, onClick: () -> Unit) {
             Text(
                 text = surah.arabicName,
                 style = MaterialTheme.typography.titleLarge.copy(
+                    fontFamily = ArabicFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 22.sp
                 ),

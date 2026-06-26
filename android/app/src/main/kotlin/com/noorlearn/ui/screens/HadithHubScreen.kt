@@ -1,21 +1,25 @@
 package com.noorlearn.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -38,21 +42,31 @@ fun HadithHubScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
+    val explainHadithId by viewModel.explainHadithId.collectAsState()
+    val explanation by viewModel.explanation.collectAsState()
+    val isExplaining by viewModel.isExplaining.collectAsState()
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Hadith Collection", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Hadith Collection", fontWeight = FontWeight.Bold, color = PrimaryGreen)
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    IconButton(onClick = { 
+                        if (!navController.popBackStack()) {
+                            navController.navigate("dashboard") {
+                                popUpTo("dashboard") { inclusive = true }
+                            }
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryGreen)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryGreen)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White, titleContentColor = PrimaryGreen)
             )
         },
-        containerColor = BeigeBackground
+        containerColor = Color.White
     ) { padding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -62,6 +76,7 @@ fun HadithHubScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(Color.White).gridBackground()
                     .padding(padding)
             ) {
                 // Search Bar
@@ -102,7 +117,13 @@ fun HadithHubScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         items(hadiths, key = { it.id }) { hadith ->
-                            HadithCard(hadith = hadith)
+                            HadithCard(
+                                hadith = hadith,
+                                onExplainClick = { viewModel.explainHadith(hadith) },
+                                isExplainLoading = isExplaining && explainHadithId == hadith.id,
+                                explanationText = if (explainHadithId == hadith.id) explanation else null,
+                                onDismissExplanation = { viewModel.dismissExplanation() }
+                            )
                         }
                     }
                 }
@@ -112,7 +133,13 @@ fun HadithHubScreen(
 }
 
 @Composable
-fun HadithCard(hadith: Hadith) {
+fun HadithCard(
+    hadith: Hadith,
+    onExplainClick: () -> Unit = {},
+    isExplainLoading: Boolean = false,
+    explanationText: String? = null,
+    onDismissExplanation: () -> Unit = {}
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -156,7 +183,11 @@ fun HadithCard(hadith: Hadith) {
 
             Text(
                 text = hadith.arabicText,
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Medium, lineHeight = 36.sp),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontFamily = ArabicFontFamily,
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 36.sp
+                ),
                 color = PrimaryGreen,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.fillMaxWidth()
@@ -175,7 +206,8 @@ fun HadithCard(hadith: Hadith) {
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = hadith.narratorChain,
@@ -192,6 +224,97 @@ fun HadithCard(hadith: Hadith) {
                         color = OrangeAccent,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
+                }
+            }
+
+            // AI Explanation Section
+            if (explanationText == null && !isExplainLoading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { onExplainClick() },
+                    shape = RoundedCornerShape(20.dp),
+                    color = OrangeLight
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = OrangeAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "Explain This",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = OrangeAccent
+                        )
+                    }
+                }
+            }
+
+            if (isExplainLoading) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = PrimaryGreen
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Thinking...", style = MaterialTheme.typography.bodySmall, color = GrayText)
+                }
+            }
+
+            if (explanationText != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = LightGreenSoft
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Filled.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = PrimaryGreen,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "AI Explanation",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = PrimaryGreen
+                                )
+                            }
+                            IconButton(
+                                onClick = onDismissExplanation,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Close",
+                                    tint = GrayText,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = explanationText,
+                            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 20.sp),
+                            color = PrimaryGreenDark
+                        )
+                    }
                 }
             }
         }

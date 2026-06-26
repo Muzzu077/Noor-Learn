@@ -6,8 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,7 +46,7 @@ fun OnboardingScreen(
                 navigationIcon = {
                     if (currentStep > 0) {
                         IconButton(onClick = { currentStep-- }) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = PrimaryGreen)
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryGreen)
                         }
                     } else {
                         Spacer(modifier = Modifier.width(48.dp))
@@ -61,14 +61,16 @@ fun OnboardingScreen(
                         Text("Skip", color = GrayText)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BeigeBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        containerColor = BeigeBackground
+        containerColor = Color.White
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.White)
+                .gridBackground()
                 .padding(padding)
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -162,7 +164,7 @@ fun OnboardingScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
-                            if (currentStep == 2) Icons.Default.Check else Icons.Default.ArrowForward,
+                            if (currentStep == 2) Icons.Default.Check else Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null
                         )
                     }

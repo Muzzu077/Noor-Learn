@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.noorlearn.data.local.NoorLearnDatabase
 import com.noorlearn.data.local.dao.AyahDao
 import com.noorlearn.data.local.dao.SurahDao
+import com.noorlearn.data.local.dao.ReflectionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,7 +27,6 @@ object DatabaseModule {
             NoorLearnDatabase::class.java,
             "noorlearn_db"
         )
-        .fallbackToDestructiveMigration()
         .build()
     }
 
@@ -35,4 +35,7 @@ object DatabaseModule {
 
     @Provides
     fun provideAyahDao(db: NoorLearnDatabase): AyahDao = db.ayahDao
+
+    @Provides
+    fun provideReflectionDao(db: NoorLearnDatabase): ReflectionDao = db.reflectionDao
 }

@@ -8,7 +8,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,20 +64,22 @@ fun QaidaScreen(navController: NavController) {
                 title = { Text("Qaida - Arabic Basics", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = PrimaryGreen)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryGreen)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BeigeBackground,
+                    containerColor = Color.White,
                     titleContentColor = DarkText
                 )
             )
         },
-        containerColor = BeigeBackground
+        containerColor = Color.White
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.White)
+                .gridBackground()
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
@@ -112,6 +114,7 @@ fun QaidaScreen(navController: NavController) {
                                 Text(
                                     text = letter.letter,
                                     style = MaterialTheme.typography.headlineLarge.copy(
+                                        fontFamily = ArabicFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         color = if (selectedLetter == letter) Color.White else DarkText
                                     )
@@ -153,6 +156,7 @@ fun QaidaScreen(navController: NavController) {
                         Text(
                             text = selectedLetter!!.letter,
                             style = MaterialTheme.typography.displayLarge.copy(
+                                fontFamily = ArabicFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 color = PrimaryGreen
                             ),

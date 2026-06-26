@@ -6,6 +6,11 @@ import com.noorlearn.domain.model.Ayah
 import com.noorlearn.domain.repository.QuranRepository
 import com.noorlearn.domain.usecase.AskChatbotUseCase
 import com.noorlearn.data.local.preferences.UserPreferencesDataStore
+import com.noorlearn.data.speech.AndroidSpeechRecognizer
+import com.noorlearn.data.speech.SpeechState
+import com.noorlearn.data.speech.AlignedWord
+import com.noorlearn.data.speech.RecitationFeedbackEngine
+import com.noorlearn.domain.usecase.SubmitRecitationUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +34,9 @@ val RECITERS = listOf(
 class AyahReaderViewModel @Inject constructor(
     private val quranRepository: QuranRepository,
     private val askChatbotUseCase: AskChatbotUseCase,
-    private val userPreferences: UserPreferencesDataStore
+    private val userPreferences: UserPreferencesDataStore,
+    private val speechRecognizer: AndroidSpeechRecognizer,
+    private val submitRecitationUseCase: SubmitRecitationUseCase
 ) : ViewModel() {
 
     private val _ayahs = MutableStateFlow<List<Ayah>>(emptyList())
@@ -69,7 +76,7 @@ class AyahReaderViewModel @Inject constructor(
     private var currentUserId: String? = null
     private var isDemoUser = false
 
-    fun loadAyahs(surahId: Int) {
+    fun loadAyahs(surahId: Int, surahName: String) {
         currentSurahId = surahId
         viewModelScope.launch {
             _isLoading.value = true
@@ -79,6 +86,11 @@ class AyahReaderViewModel @Inject constructor(
                 _ayahs.value = quranRepository.getAyahs(surahId)
                 if (_ayahs.value.isEmpty()) {
                     _error.value = "No ayahs found for this surah. Data may not be loaded yet."
+                } else {
+                    userPreferences.saveLastRead(surahId, surahName, 1)
+                    if (surahId == 67) {
+                        userPreferences.completeDailyJourneyTask("surah_reading")
+                    }
                 }
             } catch (e: Exception) {
                 _error.value = "Failed to load ayahs: ${e.message}"
@@ -159,5 +171,107 @@ class AyahReaderViewModel @Inject constructor(
         if (currentSurahId > 0) {
             loadAudio(currentSurahId, reciter.id)
         }
+    }
+
+    // Recitation states
+    val recitationState = speechRecognizer.state
+    
+    private val _alignedWords = MutableStateFlow<List<AlignedWord>?>(null)
+    val alignedWords: StateFlow<List<AlignedWord>?> = _alignedWords.asStateFlow()
+    
+    private val _recitationScore = MutableStateFlow<Float?>(null)
+    val recitationScore: StateFlow<Float?> = _recitationScore.asStateFlow()
+    
+    private val _recitationFeedback = MutableStateFlow<String?>(null)
+    val recitationFeedback: StateFlow<String?> = _recitationFeedback.asStateFlow()
+    
+    private val _isFeedbackLoading = MutableStateFlow(false)
+    val isFeedbackLoading: StateFlow<Boolean> = _isFeedbackLoading.asStateFlow()
+    
+    private val _activeRecitationAyahId = MutableStateFlow<Int?>(null)
+    val activeRecitationAyahId: StateFlow<Int?> = _activeRecitationAyahId.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            speechRecognizer.state.collect { state ->
+                if (state is SpeechState.Success) {
+                    val ayahId = _activeRecitationAyahId.value
+                    if (ayahId != null) {
+                        val ayah = _ayahs.value.find { it.id == ayahId }
+                        if (ayah != null) {
+                            handleSpeechSuccess("Surah $currentSurahId", currentSurahId, ayah, state.text)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun startRecitation(ayahId: Int) {
+        _activeRecitationAyahId.value = ayahId
+        _alignedWords.value = null
+        _recitationScore.value = null
+        _recitationFeedback.value = null
+        speechRecognizer.reset()
+        speechRecognizer.startListening()
+    }
+    
+    fun stopRecitation() {
+        speechRecognizer.stopListening()
+    }
+    
+    fun resetRecitation() {
+        _activeRecitationAyahId.value = null
+        _alignedWords.value = null
+        _recitationScore.value = null
+        _recitationFeedback.value = null
+        speechRecognizer.reset()
+    }
+    
+    private fun handleSpeechSuccess(surahName: String, surahId: Int, ayah: Ayah, transcribedText: String) {
+        viewModelScope.launch {
+            _isFeedbackLoading.value = true
+            
+            // Step 1: Compare text & calculate score
+            val (aligned, score) = RecitationFeedbackEngine.analyzeRecitation(ayah.arabicText, transcribedText)
+            _alignedWords.value = aligned
+            _recitationScore.value = score
+            
+            // Step 2: Get AI tips if needed
+            var feedback = "Excellent! You recited this verse perfectly."
+            if (score < 90f && transcribedText.isNotBlank()) {
+                val prompt = RecitationFeedbackEngine.buildFeedbackPrompt(
+                    surahName = surahName,
+                    ayahNumber = ayah.ayahNumber,
+                    referenceText = ayah.arabicText,
+                    transcribedText = transcribedText,
+                    alignedWords = aligned
+                )
+                val result = askChatbotUseCase(prompt)
+                feedback = result.getOrElse { "Nice attempt! Keep practicing to improve your pronunciation." }
+            } else if (transcribedText.isBlank()) {
+                feedback = "No speech detected. Please speak clearly into the microphone."
+            }
+            _recitationFeedback.value = feedback
+            _isFeedbackLoading.value = false
+            
+            // Step 3: Save recitation log to remote database
+            val userId = currentUserId
+            if (userId != null) {
+                submitRecitationUseCase(
+                    userId = userId,
+                    surahId = surahId,
+                    ayahId = ayah.id,
+                    transcribedText = transcribedText,
+                    accuracyScore = score,
+                    tipAi = feedback
+                )
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        speechRecognizer.destroy()
     }
 }

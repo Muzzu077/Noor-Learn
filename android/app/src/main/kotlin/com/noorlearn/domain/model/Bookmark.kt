@@ -1,8 +1,9 @@
 package com.noorlearn.domain.model
 
 data class Bookmark(
-    val id: Long,
+    val id: String,
     val userId: String,
-    val ayahId: Int,
+    val type: String, // "ayah", "hadith", or "story"
+    val referenceId: String,
     val createdAt: String
 )

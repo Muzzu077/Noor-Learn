@@ -5,8 +5,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class BookmarkDto(
-    val id: Long = 0,
+    val id: String = "",
     @SerialName("user_id") val userId: String = "",
-    @SerialName("ayah_id") val ayahId: Int = 0,
-    @SerialName("created_at") val createdAt: String = ""
+    val type: String = "", // "ayah", "hadith", or "story"
+    @SerialName("reference_id") val referenceId: String = "",
+    val timestamp: Long = 0
 )

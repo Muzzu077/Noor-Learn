@@ -12,10 +12,11 @@ class SubmitRecitationUseCase @Inject constructor(
         surahId: Int,
         ayahId: Int,
         transcribedText: String,
-        accuracyScore: Float
+        accuracyScore: Float,
+        tipAi: String?
     ): Result<RecitationLog> {
         return quranRepository.submitRecitation(
-            userId, surahId, ayahId, transcribedText, accuracyScore
+            userId, surahId, ayahId, transcribedText, accuracyScore, tipAi
         )
     }
 }

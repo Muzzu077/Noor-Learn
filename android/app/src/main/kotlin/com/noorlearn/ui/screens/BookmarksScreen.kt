@@ -33,25 +33,25 @@ fun BookmarksScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Bookmarks", fontWeight = FontWeight.Bold, color = Color.White) },
+                title = { Text("My Bookmarks", fontWeight = FontWeight.Bold, color = PrimaryGreen) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = PrimaryGreen)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryGreen)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White, titleContentColor = PrimaryGreen)
             )
         },
-        containerColor = BeigeBackground
+        containerColor = Color.White
     ) { padding ->
         when {
             isLoading -> {
-                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.White).gridBackground().padding(padding), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = PrimaryGreen)
                 }
             }
             bookmarkedAyahs.isEmpty() -> {
-                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.White).gridBackground().padding(padding), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             Icons.Filled.Favorite,
@@ -77,7 +77,7 @@ fun BookmarksScreen(
             }
             else -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
+                    modifier = Modifier.fillMaxSize().background(Color.White).gridBackground().padding(padding),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -120,7 +120,10 @@ fun BookmarksScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     text = ayah.arabicText,
-                                    style = MaterialTheme.typography.titleLarge.copy(lineHeight = 40.sp),
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontFamily = ArabicFontFamily,
+                                        lineHeight = 40.sp
+                                    ),
                                     color = DarkText,
                                     textAlign = TextAlign.Right,
                                     modifier = Modifier.fillMaxWidth()

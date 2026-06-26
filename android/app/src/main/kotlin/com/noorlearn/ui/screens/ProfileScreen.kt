@@ -48,6 +48,8 @@ fun ProfileScreen(
     val streakCount by viewModel.streakCount.collectAsState()
     val isSignedOut by viewModel.isSignedOut.collectAsState()
 
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(isSignedOut) {
         if (isSignedOut) {
             navController.navigate("auth") {
@@ -59,7 +61,7 @@ fun ProfileScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BeigeBackground)
+            .background(BeigeBackground).gridBackground()
             .verticalScroll(rememberScrollState())
     ) {
         // Header with avatar
@@ -201,24 +203,59 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Sign out
+                // Sign out & Account Deletion
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = CardWhite),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
-                    SettingsItem(
-                        icon = Icons.AutoMirrored.Outlined.ExitToApp,
-                        title = "Sign Out",
-                        titleColor = ErrorRed,
-                        iconColor = ErrorRed,
-                        onClick = { viewModel.signOut() }
-                    )
+                    Column {
+                        SettingsItem(
+                            icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                            title = "Sign Out",
+                            titleColor = ErrorRed,
+                            iconColor = ErrorRed,
+                            onClick = { viewModel.signOut() }
+                        )
+                        HorizontalDivider(color = DividerLight, modifier = Modifier.padding(horizontal = 20.dp))
+                        SettingsItem(
+                            icon = Icons.Outlined.Settings,
+                            title = "Delete Account",
+                            subtitle = "Permanently remove your data",
+                            titleColor = ErrorRed,
+                            iconColor = ErrorRed,
+                            onClick = { showDeleteDialog = true }
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
             }
+        
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text("Delete Account") },
+                text = { Text("Are you sure you want to delete your account? This action is permanent. All your recitation logs, bookmarks, and streaks will be deleted forever.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showDeleteDialog = false
+                            viewModel.deleteAccount()
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
 }
 

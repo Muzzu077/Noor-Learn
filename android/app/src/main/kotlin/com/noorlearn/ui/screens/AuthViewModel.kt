@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,7 +23,7 @@ class AuthViewModel @Inject constructor(
     private val _user = MutableStateFlow<User?>(null)
     val user: StateFlow<User?> = _user.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
+    private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
@@ -34,7 +35,23 @@ class AuthViewModel @Inject constructor(
     
     private fun checkSession() {
         viewModelScope.launch {
-            _user.value = authRepository.getCurrentUser()
+            _isLoading.value = true
+            val savedUserId = userPreferences.userId.first()
+            if (BuildConfig.DEBUG && savedUserId?.startsWith("demo") == true) {
+                val savedName = userPreferences.userName.first()
+                _user.value = com.noorlearn.domain.model.User(
+                    id = savedUserId,
+                    name = savedName,
+                    email = "demo@noorlearn.app",
+                    roleMode = "student",
+                    streakDays = 0,
+                    isPremium = true,
+                    createdAt = "2026-03-25"
+                )
+            } else {
+                _user.value = authRepository.getCurrentUser()
+            }
+            _isLoading.value = false
         }
     }
 
@@ -95,6 +112,40 @@ class AuthViewModel @Inject constructor(
                 onSuccess()
             } else {
                 _error.value = result.exceptionOrNull()?.message ?: "Signup failed"
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun sendPasswordResetEmail(email: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            val result = authRepository.sendPasswordResetEmail(email)
+            if (result.isSuccess) {
+                onSuccess()
+            } else {
+                _error.value = result.exceptionOrNull()?.message ?: "Failed to send password reset email."
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun signInWithGoogle(idToken: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            val result = authRepository.signInWithGoogle(idToken)
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                _user.value = user
+                user?.let {
+                    userPreferences.saveUserId(it.id)
+                    userPreferences.saveUserName(it.name)
+                }
+                onSuccess()
+            } else {
+                _error.value = result.exceptionOrNull()?.message ?: "Google login failed."
             }
             _isLoading.value = false
         }
